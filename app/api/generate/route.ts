@@ -13,8 +13,10 @@ export async function POST() {
   try {
     const res = await openai.images.generate({
       model: "dall-e-2",
-      prompt:
-        "创作一张图片生成透明背景的九个贴纸，有不同表情和动作（开心、快乐、生气等），正方形，平面日系可爱风，实用的表情贴图",
+      // prompt:
+      //   "创作一张图片生成透明背景的九个贴纸，有不同表情和动作（开心、快乐、生气等），正方形，平面日系可爱风，实用的表情贴图",
+      prompt: "A cute cat sticker sheet, transparent background",
+
       size: "1024x1024",
       n: 1,
     });
