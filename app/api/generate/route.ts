@@ -13,7 +13,7 @@ export async function POST(req: Request) {
       "创作一张图片生成透明背景的九个贴纸，有不同的表情跟动作（开心、快乐、生气等），正方形，平面日系可爱风，实用的表情贴图";
 
     const res = await openai.images.generate({
-      model: "gpt-4o-image-alpha",
+      model: "dall-e-3",
       prompt,
       size: "1024x1024",
       n: 1,
