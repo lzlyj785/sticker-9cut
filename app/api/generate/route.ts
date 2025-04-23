@@ -1,29 +1,30 @@
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY!,
-});
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! });
 
 export const runtime = "edge";
 
-export async function POST(req: Request) {
+export async function POST() {
   try {
-    const prompt =
-      "创作一张图片生成透明背景的九个贴纸，有不同的表情跟动作（开心、快乐、生气等），正方形，平面日系可爱风，实用的表情贴图";
-
     const res = await openai.images.generate({
       model: "dall-e-3",
-      prompt,
+      prompt:
+        "创作一张图片生成透明背景的九个贴纸，有不同表情和动作（开心、快乐、生气等），正方形，平面日系可爱风，实用的表情贴图",
       size: "1024x1024",
       n: 1,
-      response_format: "b64_json",
-      user: "sticker-mvp",
+      // ★ 先不用 response_format, 让它返回 URL
     });
 
-    return NextResponse.json({ ok: true, data: res.data[0].b64_json });
+    // 取第一张图的临时 URL
+    const imageUrl = res.data[0].url as string;
+
+    return NextResponse.json({ ok: true, url: imageUrl });
   } catch (e: any) {
-    console.error("OpenAI error →", e);          // 方便调试
-    return NextResponse.json({ ok: false, error: e.message }, { status: 500 });
+    console.error("OpenAI error →", e);
+    return NextResponse.json(
+      { ok: false, error: e?.error?.message ?? e.message },
+      { status: 500 }
+    );
   }
 }
