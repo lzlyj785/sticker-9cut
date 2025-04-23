@@ -18,6 +18,7 @@ export async function POST() {
         headers: {
           Authorization: `Bearer ${TOKEN}`,
           "Content-Type": "application/json",
+          "Accept": "application/json", 
         },
         body: JSON.stringify({
           prompt:
