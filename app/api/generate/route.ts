@@ -1,32 +1,38 @@
-// app/api/generate/route.ts
+// 引入依赖保持不变
 import { NextResponse } from "next/server";
-import OpenAI from "openai";
 
-export const runtime = "nodejs";          // ❶ 改成 nodejs
-export const preferredRegion = ["iad1"];  // ❷ 可选，锁定美东机房
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY!,
-});
+export const runtime = "nodejs";          // 保持 Node 运行时
+export const preferredRegion = ["iad1"];  // 任意美区机房
 
 export async function POST() {
   try {
-    const res = await openai.images.generate({
-      model: "dall-e-2",
-      // prompt:
-      //   "创作一张图片生成透明背景的九个贴纸，有不同表情和动作（开心、快乐、生气等），正方形，平面日系可爱风，实用的表情贴图",
-      prompt: "A cute cat sticker sheet, transparent background",
+    // ① 读取 Cloudflare 账号和 Token
+    const ACCOUNT = process.env.CF_ACCOUNT_ID!;
+    const TOKEN   = process.env.CF_API_TOKEN!;
 
-      size: "1024x1024",
-      n: 1,
-    });
+    // ② 组织请求
+    const resp = await fetch(
+      `https://api.cloudflare.com/client/v4/accounts/${ACCOUNT}/ai/run/@cf/stabilityai/stable-diffusion-xl-base-1.0`, // :contentReference[oaicite:2]{index=2}
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${TOKEN}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          prompt:
+            "创作一张图片生成透明背景的九个贴纸，有不同表情和动作（开心、快乐、生气等），正方形，平面日系可爱风，实用的表情贴图, sticker sheet, transparent background",
+          // 可选参数：num_steps, seed …
+        }),
+      }
+    ).then((r) => r.json());
 
-    return NextResponse.json({ ok: true, url: res.data[0].url });
+    if (!resp.result) throw new Error(JSON.stringify(resp));
+
+    // resp.result 是 base64 字符串 → 与 OpenAI 的 b64_json 完全相同
+    return NextResponse.json({ ok: true, data: resp.result });
   } catch (e: any) {
-    console.error("OpenAI error →", JSON.stringify(e, null, 2));
-    return NextResponse.json(
-      { ok: false, error: e?.error?.message ?? e.message },
-      { status: 500 },
-    );
+    console.error("CF AI error →", e);
+    return NextResponse.json({ ok: false, error: e.message }, { status: 500 });
   }
 }
