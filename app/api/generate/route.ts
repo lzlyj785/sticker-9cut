@@ -1,7 +1,7 @@
 // 引入依赖保持不变
 import { NextResponse } from "next/server";
 
-export const runtime = "nodejs";          // 保持 Node 运行时
+export const runtime = "edge";          // 保持 Node 运行时
 export const preferredRegion = ["iad1"];  // 任意美区机房
 
 export async function POST() {
