@@ -3,7 +3,9 @@ import OpenAI from "openai";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! });
 
-export const runtime = "edge";
+// export const runtime = "edge";
+export const runtime = "nodejs"; 
+export const preferredRegion = ["iad1"]; 
 
 export async function POST() {
   try {
