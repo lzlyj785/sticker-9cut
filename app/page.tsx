@@ -35,9 +35,9 @@ export default function Home() {
 
       if (!res.ok) throw new Error(res.error);
 
-      // await sliceAndDownload(res.data); // 裁剪+打包
-      alert("生成成功！图片地址如下，复制到浏览器可查看：\n\n" + res.url);
-      return; // 先结束函数，后面裁剪逻辑暂时不执行
+      await sliceAndDownload(res.data); // 裁剪+打包
+      // alert("生成成功！图片地址如下，复制到浏览器可查看：\n\n" + res.url);
+      // return; // 先结束函数，后面裁剪逻辑暂时不执行
       toast.success("已下载 stickers.zip");
     } catch (e: any) {
       toast.error(e.message);
