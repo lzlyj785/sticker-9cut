@@ -7,12 +7,13 @@ import JSZip from "jszip";
 import toast, { Toaster } from "react-hot-toast";
 
 export default function Home() {
-  /* ---------- 本地状态 ---------- */
-  const [uploadPreview, setUploadPreview] = useState<string | null>(null);
-  const [genPreview, setGenPreview] = useState<string | null>(null);
+  /* ---------- 状态 ---------- */
+  const [uploadPreview, setUploadPreview] = useState<string | null>(null); // 用户上传
+  const [prompt, setPrompt] = useState("");                               // 自定义提示词
+  const [genPreview, setGenPreview] = useState<string | null>(null);       // 生成预览
   const [loading, setLoading] = useState(false);
 
-  /* ---------- 拖拽上传 ---------- */
+  /* ---------- 上传 ---------- */
   const onDrop = useCallback((files: File[]) => {
     const file = files[0];
     const reader = new FileReader();
@@ -25,7 +26,7 @@ export default function Home() {
     maxFiles: 1,
   });
 
-  /* ---------- 生成贴纸 ---------- */
+  /* ---------- 生成 ---------- */
   async function generate() {
     setGenPreview(null);
     setLoading(true);
@@ -35,13 +36,13 @@ export default function Home() {
       const res = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageB64 }),
+        body: JSON.stringify({ imageB64, prompt }),
       }).then((r) => r.json());
 
       if (!res.ok) throw new Error(res.error);
 
-      setGenPreview("data:image/png;base64," + res.data); // 页面预览
-      await sliceAndDownload(res.data);                   // 裁剪 + 打包
+      setGenPreview("data:image/png;base64," + res.data);
+      await sliceAndDownload(res.data);
 
       toast.success("已下载 stickers.zip");
     } catch (e: any) {
@@ -51,7 +52,7 @@ export default function Home() {
     }
   }
 
-  /* ---------- 裁剪九宫格并 zip ---------- */
+  /* ---------- 裁剪九宫格 ---------- */
   async function sliceAndDownload(b64: string) {
     const img = await loadImage("data:image/png;base64," + b64);
     const size = img.width / 3;
@@ -60,7 +61,7 @@ export default function Home() {
     canvas.width = canvas.height = size;
     const ctx = canvas.getContext("2d")!;
 
-    let index = 1;
+    let idx = 1;
     for (let y = 0; y < 3; y++) {
       for (let x = 0; x < 3; x++) {
         ctx.clearRect(0, 0, size, size);
@@ -68,15 +69,15 @@ export default function Home() {
         const blob = await new Promise<Blob>((ok) =>
           canvas.toBlob((b) => ok(b!), "image/png")
         );
-        zip.file(`sticker-${index}.png`, blob);
-        index++;
+        zip.file(`sticker-${idx}.png`, blob);
+        idx++;
       }
     }
     const zipBlob = await zip.generateAsync({ type: "blob" });
     downloadBlob("stickers.zip", zipBlob);
   }
 
-  /* ---------- 工具函数 ---------- */
+  /* ---------- 工具 ---------- */
   function loadImage(src: string): Promise<HTMLImageElement> {
     return new Promise((ok, err) => {
       const i = new Image();
@@ -114,6 +115,15 @@ export default function Home() {
           <span>拖拽或点击上传一张图片（可选）</span>
         )}
       </div>
+
+      {/* 自定义提示词 */}
+      <input
+        type="text"
+        placeholder="自定义提示词（留空用默认）"
+        value={prompt}
+        onChange={(e) => setPrompt(e.target.value)}
+        className="border rounded w-64 p-2"
+      />
 
       {/* 生成按钮 */}
       <button

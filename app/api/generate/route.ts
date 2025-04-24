@@ -1,36 +1,34 @@
 // app/api/generate/route.ts
 import { NextResponse } from "next/server";
 
-/* ---------- 运行时配置 ---------- */
-export const runtime = "edge";          // Edge Runtime → 无 10 s 限制
-// 若需要固定机房，可保留 ↓；否则整行删掉
-export const preferredRegion = ["iad1"]; // Cloudflare 亚洲机房有时慢
+export const runtime = "edge";
 
-/* ---------- 环境变量 ---------- */
-const ACCOUNT  = process.env.CF_ACCOUNT_ID!;
-const TOKEN    = process.env.CF_API_TOKEN!;
+const ACCOUNT = process.env.CF_ACCOUNT_ID!;
+const TOKEN   = process.env.CF_API_TOKEN!;
 
 const MODEL_URL =
   `https://api.cloudflare.com/client/v4/accounts/${ACCOUNT}` +
-  `/ai/run/@cf/stabilityai/stable-diffusion-xl-base-1.0`;   // ⚡ 若想更快用 lightning 把末尾改 -lightning
+  `/ai/run/@cf/stabilityai/stable-diffusion-xl-base-1.0`;     // 快速版可换 lightning
 
-/* ---------- 接口 ---------- */
 export async function POST(req: Request) {
   try {
-    const { imageB64 } = await req.json();     // 前端可不传
+    /* ---------- 接收前端数据 ---------- */
+    const { imageB64, prompt: userPrompt = "" } = await req.json();
 
+    /* ---------- 组织请求体 ---------- */
+    const defaultPrompt =
+      "九宫格贴纸, 透明背景, 平面日系可爱风, sticker sheet, transparent background";
     const body: Record<string, any> = {
-      prompt:
-        "创作一张图片生成透明背景的九个贴纸，有不同表情和动作（开心、快乐、生气等），正方形，平面日系可爱风，实用的表情贴图, sticker sheet, transparent background",
+      prompt: `${userPrompt.trim()} ${defaultPrompt}`.trim(),
     };
 
     if (imageB64) {
-      body.image = `data:image/png;base64,${imageB64}`; // 带上参考图
-      body.strength = 0.35;                              // 0~1 越小越像原图
+      body.image = `data:image/png;base64,${imageB64}`;
+      body.strength = 0.3;                // 0=最像原图, 1=完全重新生成
     }
 
-    /* --- 调用 Cloudflare Workers AI --- */
-    const cfRes = await fetch(MODEL_URL, {
+    /* ---------- 调 Cloudflare Workers AI ---------- */
+    const aiRes = await fetch(MODEL_URL, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${TOKEN}`,
@@ -40,16 +38,15 @@ export async function POST(req: Request) {
       body: JSON.stringify(body),
     });
 
-    /* --- 兼容返回 JSON 或 PNG 二进制 --- */
-    const ctype = cfRes.headers.get("content-type") || "";
+    const ctype = aiRes.headers.get("content-type") || "";
     let base64: string;
 
     if (ctype.includes("application/json")) {
-      const j = await cfRes.json();
+      const j = await aiRes.json();
       if (!j.result) throw new Error(JSON.stringify(j));
-      base64 = j.result;                            // 已是 base64
+      base64 = j.result;
     } else {
-      const buf = Buffer.from(await cfRes.arrayBuffer());
+      const buf = Buffer.from(await aiRes.arrayBuffer());
       base64 = buf.toString("base64");
     }
 
