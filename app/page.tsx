@@ -7,13 +7,13 @@ import JSZip from "jszip";
 import toast, { Toaster } from "react-hot-toast";
 
 export default function Home() {
-  /* ---------- 状态 ---------- */
-  const [uploadPreview, setUploadPreview] = useState<string | null>(null); // 用户上传
-  const [prompt, setPrompt] = useState("");                               // 自定义提示词
-  const [genPreview, setGenPreview] = useState<string | null>(null);       // 生成预览
+  /* ---------- React 状态 ---------- */
+  const [uploadPreview, setUploadPreview] = useState<string | null>(null);
+  const [prompt, setPrompt] = useState("");
+  const [genPreviewUrl, setGenPreviewUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  /* ---------- 上传 ---------- */
+  /* ---------- 拖拽上传 ---------- */
   const onDrop = useCallback((files: File[]) => {
     const file = files[0];
     const reader = new FileReader();
@@ -26,9 +26,9 @@ export default function Home() {
     maxFiles: 1,
   });
 
-  /* ---------- 生成 ---------- */
+  /* ---------- 生成贴纸 ---------- */
   async function generate() {
-    setGenPreview(null);
+    setGenPreviewUrl(null);
     setLoading(true);
     try {
       const imageB64 = uploadPreview ? uploadPreview.split(",")[1] : null;
@@ -41,7 +41,12 @@ export default function Home() {
 
       if (!res.ok) throw new Error(res.error);
 
-      setGenPreview("data:image/png;base64," + res.data);
+      /* --- 预览：用 Blob URL 避免 data: URL 被拦截 --- */
+      const blob = b64toBlob(res.data, "image/png");
+      const localUrl = URL.createObjectURL(blob);
+      setGenPreviewUrl(localUrl);
+
+      /* --- 裁剪 + 下载 ZIP --- */
       await sliceAndDownload(res.data);
 
       toast.success("已下载 stickers.zip");
@@ -52,7 +57,7 @@ export default function Home() {
     }
   }
 
-  /* ---------- 裁剪九宫格 ---------- */
+  /* ---------- 裁剪九宫格并打包 ---------- */
   async function sliceAndDownload(b64: string) {
     const img = await loadImage("data:image/png;base64," + b64);
     const size = img.width / 3;
@@ -77,7 +82,7 @@ export default function Home() {
     downloadBlob("stickers.zip", zipBlob);
   }
 
-  /* ---------- 工具 ---------- */
+  /* ---------- 辅助 ---------- */
   function loadImage(src: string): Promise<HTMLImageElement> {
     return new Promise((ok, err) => {
       const i = new Image();
@@ -93,6 +98,13 @@ export default function Home() {
     a.download = name;
     a.click();
     URL.revokeObjectURL(url);
+  }
+  function b64toBlob(b64: string, mime: string) {
+    const bin = atob(b64);
+    const len = bin.length;
+    const arr = new Uint8Array(len);
+    for (let i = 0; i < len; i++) arr[i] = bin.charCodeAt(i);
+    return new Blob([arr], { type: mime });
   }
 
   /* ---------- UI ---------- */
@@ -116,10 +128,10 @@ export default function Home() {
         )}
       </div>
 
-      {/* 自定义提示词 */}
+      {/* 自定义提示词输入 */}
       <input
         type="text"
-        placeholder="自定义提示词（留空用默认）"
+        placeholder="自定义提示词（留空使用默认）"
         value={prompt}
         onChange={(e) => setPrompt(e.target.value)}
         className="border rounded w-64 p-2"
@@ -134,11 +146,11 @@ export default function Home() {
         {loading ? "生成中…" : "生成贴纸"}
       </button>
 
-      {/* 生成预览 */}
-      {genPreview && (
+      {/* 预览 */}
+      {genPreviewUrl && (
         <div className="mt-6">
           <p className="mb-2 font-medium">整张贴纸预览 ▼</p>
-          <img src={genPreview} className="w-64 border rounded-xl" />
+          <img src={genPreviewUrl} className="w-64 border rounded-xl" />
         </div>
       )}
     </main>
