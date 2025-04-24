@@ -1,20 +1,16 @@
-// app/api/generate/route.ts
 import { NextResponse } from "next/server";
 
-export const runtime = "edge";               // 无 10 s 限制
+export const runtime = "edge";
 
-/* ---------- 你的 Cloudflare 账号信息 ---------- */
 const ACCOUNT = process.env.CF_ACCOUNT_ID!;
 const TOKEN   = process.env.CF_API_TOKEN!;
 
-/* ---------- 模型地址（需要更快可换 lightning） ---------- */
 const MODEL_URL =
   `https://api.cloudflare.com/client/v4/accounts/${ACCOUNT}` +
-  `/ai/run/@cf/stabilityai/stable-diffusion-xl-base-1.0`;
+  `/ai/run/@cf/stabilityai/stable-diffusion-xl-base-1.0`;   // lightning 版可把末尾改 -lightning
 
 export async function POST(req: Request) {
   try {
-    /* ---------- 解析前端 payload ---------- */
     const { imageB64, prompt: userPrompt = "" } = await req.json();
 
     const defaultPrompt =
@@ -26,11 +22,10 @@ export async function POST(req: Request) {
 
     if (imageB64) {
       body.image = `data:image/png;base64,${imageB64}`;
-      body.strength = 0.3; // 越小越贴近原图
+      body.strength = 0.3;
     }
 
-    /* ---------- 调用 Cloudflare Workers AI ---------- */
-    const aiRes = await fetch(MODEL_URL, {
+    const cfRes = await fetch(MODEL_URL, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${TOKEN}`,
@@ -40,36 +35,47 @@ export async function POST(req: Request) {
       body: JSON.stringify(body),
     });
 
-    const ctype = aiRes.headers.get("content-type") || "";
-
-    /* ---------- 抽取 base64，无论 JSON 还是 PNG ---------- */
+    /* ---------- 统一拿到 JSON 或二进制 ---------- */
+    const ctype = cfRes.headers.get("content-type") || "";
     let base64: string | undefined;
 
     if (ctype.includes("application/json")) {
-      const raw = await aiRes.json();
-      // 兼容三种常见结构
-      if (typeof raw === "string") base64 = raw;
-      else if (typeof raw.result === "string") base64 = raw.result;
-      else if (typeof raw.result === "object" && raw.result) {
-        base64 =
-          raw.result.image ??
-          raw.result.response ??
-          Object.values(raw.result)[0];
-      }
+      const raw = await cfRes.json();
+
+      // 把前 500 个字符打印，便于你在 Vercel 日志里查看实际结构
+      console.log(
+        "CF raw json →",
+        JSON.stringify(raw).slice(0, 500) + " ...[truncated]"
+      );
+
+      base64 = bruteFindBase64(raw);
     } else {
-      // 服务器直接返回 PNG
-      const buf = Buffer.from(await aiRes.arrayBuffer());
+      const buf = Buffer.from(await cfRes.arrayBuffer());
       base64 = buf.toString("base64");
     }
 
-    if (!base64) throw new Error("No base64 field found in CF response");
+    if (!base64) throw new Error("Unable to locate base64 in CF response");
 
     return NextResponse.json({ ok: true, data: base64 });
   } catch (e: any) {
     console.error("CF AI error →", e);
-    return NextResponse.json(
-      { ok: false, error: String(e) },
-      { status: 500 },
-    );
+    return NextResponse.json({ ok: false, error: String(e) }, { status: 500 });
+  }
+}
+
+/* ---------- 递归扫描对象，找第一个大块 base64 ---------- */
+function bruteFindBase64(obj: any): string | undefined {
+  if (!obj || typeof obj !== "object") return;
+
+  const queue: any[] = [obj];
+  while (queue.length) {
+    const cur = queue.shift();
+    for (const val of Object.values(cur)) {
+      if (typeof val === "string" && val.length > 1000 && /^[A-Za-z0-9+/]+=*$/.test(val.slice(0, 1000))) {
+        return val;
+      } else if (typeof val === "object" && val) {
+        queue.push(val);
+      }
+    }
   }
 }
