@@ -5,31 +5,29 @@ export const runtime = "edge";
 const ACCOUNT = process.env.CF_ACCOUNT_ID!;
 const TOKEN   = process.env.CF_API_TOKEN!;
 
-/* 模型常量 */
 const MODEL_TEXT2IMG =
   `https://api.cloudflare.com/client/v4/accounts/${ACCOUNT}` +
   `/ai/run/@cf/stabilityai/stable-diffusion-xl-base-1.0`;
 const MODEL_IMG2IMG =
   `https://api.cloudflare.com/client/v4/accounts/${ACCOUNT}` +
-  `/ai/run/@cf/stabilityai/stable-diffusion-xl-img2img-1.0`; // 官方 img2img 端点
+  `/ai/run/@cf/stabilityai/stable-diffusion-xl-img2img-1.0`;
 
 export async function POST(req: Request) {
   try {
     const { imageB64, prompt: userPrompt = "" } = await req.json();
 
-    /* ---------- 共同 prompt ---------- */
     const defaultPrompt =
       "九宫格贴纸, 平面日系可爱风, sticker sheet, transparent background";
-    const prompt = `${userPrompt.trim()} ${defaultPrompt}`.trim();
 
-    /* ---------- 选择模型 & 拼请求体 ---------- */
+    const body: Record<string, any> = {
+      prompt: `${userPrompt.trim()} ${defaultPrompt}`.trim(),
+    };
+
     let url = MODEL_TEXT2IMG;
-    const body: Record<string, any> = { prompt };
-
     if (imageB64) {
       url = MODEL_IMG2IMG;
       body.image = `data:image/png;base64,${imageB64}`;
-      body.strength = 0.35;          // 0=最像原图, 1=完全重绘
+      body.strength = 0.35;
     }
 
     const cfRes = await fetch(url, {
@@ -42,17 +40,32 @@ export async function POST(req: Request) {
       body: JSON.stringify(body),
     });
 
-    /* ---------- 解析返回 ---------- */
-    const resp = await cfRes.json();           // 两个模型都返回 JSON
-    const b64 =
-      typeof resp === "string"
-        ? resp
-        : resp.result?.image || resp.result?.response || resp.result;
+    const resp = await cfRes.json();
 
-    if (!b64 || typeof b64 !== "string")
-      throw new Error("CF response missing base64 string");
+    /* --- ⬇⬇ Debug：打印完整返回，供你/我查看 --- */
+    console.log(
+      "CF full response →",
+      JSON.stringify(resp).slice(0, 800) + " ...[truncated]"
+    );
 
-    return NextResponse.json({ ok: true, data: b64 });
+    /* --- 先处理 Cloudflare 错误 --- */
+    if (resp.success === false || resp.errors?.length) {
+      const msg = resp.errors?.[0]?.message || "Workers AI unknown error";
+      throw new Error(msg);
+    }
+
+    /* --- 提取 base64 字符串（多重兜底） --- */
+    const base64 =
+      resp.result?.image ??
+      resp.result?.response ??
+      (typeof resp.result === "string" ? resp.result : undefined);
+
+    if (!base64)
+      throw new Error(
+        "No base64 image found. Model returned: " + JSON.stringify(resp).slice(0, 200)
+      );
+
+    return NextResponse.json({ ok: true, data: base64 });
   } catch (e: any) {
     console.error("CF AI error →", e);
     return NextResponse.json({ ok: false, error: String(e) }, { status: 500 });
