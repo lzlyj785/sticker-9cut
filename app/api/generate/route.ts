@@ -21,7 +21,8 @@ export async function POST() {
       },
       body: JSON.stringify({
         prompt:
-          "创作一张图片生成透明背景的九个贴纸，有不同表情和动作（开心、快乐、生气等），正方形，平面日系可爱风，实用的表情贴图, sticker sheet, transparent background",
+          // "根据我提供的图像创作一张图片生成透明背景的九个贴纸，有不同表情和动作（开心、快乐、生气等），正方形，平面日系可爱风，实用的表情贴图, sticker sheet, transparent background",
+          "Based on the provided image, create a set of nine stickers with transparent backgrounds, featuring different expressions and actions (happy, joyful, angry, etc.), square-shaped, flat Japanese cute style, practical emoji stickers, sticker sheet, transparent background",
       }),
     });
 
