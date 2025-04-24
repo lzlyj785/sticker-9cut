@@ -1,3 +1,4 @@
+// app/page.tsx
 "use client";
 
 import { useState, useCallback } from "react";
@@ -6,40 +7,42 @@ import JSZip from "jszip";
 import toast, { Toaster } from "react-hot-toast";
 
 export default function Home() {
-  const [preview, setPreview] = useState<string | null>(null);
+  /* ---------- 本地状态 ---------- */
+  const [uploadPreview, setUploadPreview] = useState<string | null>(null);
+  const [genPreview, setGenPreview] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  /* ---------- 拖拽上传 ---------- */
   const onDrop = useCallback((files: File[]) => {
     const file = files[0];
     const reader = new FileReader();
-    reader.onload = () => setPreview(reader.result as string);
+    reader.onload = () => setUploadPreview(reader.result as string);
     reader.readAsDataURL(file);
   }, []);
-
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: { "image/*": [] },
     maxFiles: 1,
   });
 
+  /* ---------- 生成贴纸 ---------- */
   async function generate() {
-    if (!preview) return toast.error("先上传一张图片");
+    setGenPreview(null);
     setLoading(true);
     try {
-      const base64 = preview.split(",")[1]; // 去掉 data:image/png;base64,
+      const imageB64 = uploadPreview ? uploadPreview.split(",")[1] : null;
+
       const res = await fetch("/api/generate", {
         method: "POST",
-        body: JSON.stringify({ imageB64: base64 }),
         headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageB64 }),
       }).then((r) => r.json());
 
       if (!res.ok) throw new Error(res.error);
-      const previewUrl = "data:image/png;base64," + res.data;
-      window.open(previewUrl, "_blank");
 
-      await sliceAndDownload(res.data); // 裁剪+打包
-      // alert("生成成功！图片地址如下，复制到浏览器可查看：\n\n" + res.url);
-      // return; // 先结束函数，后面裁剪逻辑暂时不执行
+      setGenPreview("data:image/png;base64," + res.data); // 页面预览
+      await sliceAndDownload(res.data);                   // 裁剪 + 打包
+
       toast.success("已下载 stickers.zip");
     } catch (e: any) {
       toast.error(e.message);
@@ -48,11 +51,10 @@ export default function Home() {
     }
   }
 
-  /** 把 GPT 返回的 b64 图片裁成 9 张并 zip */
+  /* ---------- 裁剪九宫格并 zip ---------- */
   async function sliceAndDownload(b64: string) {
     const img = await loadImage("data:image/png;base64," + b64);
-    const size = img.width / 3; // 每格大小
-
+    const size = img.width / 3;
     const zip = new JSZip();
     const canvas = document.createElement("canvas");
     canvas.width = canvas.height = size;
@@ -74,7 +76,7 @@ export default function Home() {
     downloadBlob("stickers.zip", zipBlob);
   }
 
-  /* 小工具 ↓↓↓ */
+  /* ---------- 工具函数 ---------- */
   function loadImage(src: string): Promise<HTMLImageElement> {
     return new Promise((ok, err) => {
       const i = new Image();
@@ -92,11 +94,13 @@ export default function Home() {
     URL.revokeObjectURL(url);
   }
 
+  /* ---------- UI ---------- */
   return (
     <main className="flex min-h-screen flex-col items-center p-6 gap-6">
       <Toaster />
-      <h1 className="text-2xl font-bold">九宫格表情贴纸生成器 (MVP)</h1>
+      <h1 className="text-2xl font-bold">九宫格表情贴纸生成器</h1>
 
+      {/* 上传框 */}
       <div
         {...getRootProps()}
         className={`border-2 border-dashed rounded-xl w-64 h-64 flex items-center justify-center text-center cursor-pointer ${
@@ -104,14 +108,14 @@ export default function Home() {
         }`}
       >
         <input {...getInputProps()} />
-        {preview ? (
-          /* 预览上传的原图 */
-          <img src={preview} className="object-contain max-h-60" />
+        {uploadPreview ? (
+          <img src={uploadPreview} className="object-contain max-h-60" />
         ) : (
-          <span>拖拽或点击上传一张图片</span>
+          <span>拖拽或点击上传一张图片（可选）</span>
         )}
       </div>
 
+      {/* 生成按钮 */}
       <button
         onClick={generate}
         disabled={loading}
@@ -119,6 +123,14 @@ export default function Home() {
       >
         {loading ? "生成中…" : "生成贴纸"}
       </button>
+
+      {/* 生成预览 */}
+      {genPreview && (
+        <div className="mt-6">
+          <p className="mb-2 font-medium">整张贴纸预览 ▼</p>
+          <img src={genPreview} className="w-64 border rounded-xl" />
+        </div>
+      )}
     </main>
   );
 }
