@@ -34,6 +34,8 @@ export default function Home() {
       }).then((r) => r.json());
 
       if (!res.ok) throw new Error(res.error);
+      const previewUrl = "data:image/png;base64," + res.data;
+      window.open(previewUrl, "_blank");
 
       await sliceAndDownload(res.data); // 裁剪+打包
       // alert("生成成功！图片地址如下，复制到浏览器可查看：\n\n" + res.url);
